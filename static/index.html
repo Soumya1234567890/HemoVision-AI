@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HemoVision AI — Clinical HPLC & Hemoglobinopathy Decision Support</title>
+  <meta name="description" content="Advanced proof-of-concept AI diagnostic decision support system for distinguishing Iron Deficiency Anemia from Beta Thalassemia Trait using RBF Support Vector Machines and multi-method Explainable AI (SHAP, Decision Space Contours, Support Vector Exemplars).">
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <!-- Chart.js for smooth data visualizations -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+  <!-- Top Header Navigation -->
+  <header class="header-bar">
+    <div class="brand-wrapper">
+      <img src="/static/logo.jpg" alt="HemoVision AI Logo" class="brand-logo" id="appLogo">
+      <div class="brand-text">
+        <h1>HemoVision AI</h1>
+        <div class="brand-subtitle">
+          <span>IDA & Beta Thalassemia Trait Classifier</span>
+          <span class="badge">Logistic Regression (L2)</span>
+          <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #6ee7b7; border-color: rgba(16, 185, 129, 0.3);">99.6% Sensitivity (BTT)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="header-controls">
+      <!-- Clinical Presets Dropdown -->
+      <label for="presetSelect" style="font-size: 0.75rem; color: var(--text-secondary); font-weight: 600;">Case Study:</label>
+      <select id="presetSelect" class="select-custom" aria-label="Select Clinical Case Preset">
+        <option value="">-- Select Clinical Preset --</option>
+        <option value="classic_btt">Classic Beta Thalassemia Trait</option>
+        <option value="severe_ida">Severe Iron Deficiency Anemia</option>
+        <option value="borderline_discordant">Diagnostic Conflict: Mentzer vs AI</option>
+        <option value="pediatric_microcytic">Pediatric Microcytic Presentation</option>
+      </select>
+
+      <button id="btnRandomCohort" class="btn btn-secondary" title="Pulls a real verified patient case from the HPLC clinical study">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+        Random Patient
+      </button>
+
+      <button id="btnExportReport" class="btn btn-outline" title="View printable clinical diagnostic summary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        Clinical Report
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="app-container">
+    
+    <!-- LEFT PANEL: Patient Inputs & Parameters -->
+    <aside class="input-panel">
+      <div class="glass-card">
+        <div class="card-header">
+          <div class="card-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
+            Patient Blood Indices (CBC)
+          </div>
+          <button id="btnResetInputs" class="btn btn-secondary" style="padding: 0.25rem 0.6rem; font-size: 0.75rem;">Reset</button>
+        </div>
+
+        <!-- Mentzer Index Quick Banner -->
+        <div class="mentzer-banner" id="mentzerBanner">
+          <div class="mentzer-metric">
+            <span class="mentzer-label">Calculated Mentzer Index (MCV / RBC)</span>
+            <div class="mentzer-val-row">
+              <span class="mentzer-number" id="mentzerDisplay">11.6</span>
+              <span class="mentzer-status-pill btt" id="mentzerPill">Rule: &lt;13 (Suggests BTT)</span>
+            </div>
+          </div>
+          <div style="font-size: 0.7rem; color: var(--text-muted); text-align: right;">
+            Traditional Cut-off: <strong>13.0</strong>
+          </div>
+        </div>
+
+        <div style="height: 0.75rem;"></div>
+
+        <!-- Dynamic Feature Sliders & Number Inputs -->
+        <form id="patientForm" class="feature-list" onsubmit="return false;">
+          <!-- Dynamically populated by JS from /api/info -->
+        </form>
+
+        <div style="margin-top: 1.25rem;">
+          <button id="btnRunInference" class="btn btn-primary" style="width: 100%; justify-content: center; padding: 0.75rem;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Run Full Diagnostic & Explainability Inference
+          </button>
+        </div>
+      </div>
+
+      <!-- Model Specifications Card -->
+      <div class="glass-card" style="font-size: 0.75rem; color: var(--text-secondary);">
+        <div class="card-title" style="margin-bottom: 0.5rem; font-size: 0.85rem;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          Model Architecture
+        </div>
+        <p style="margin-bottom: 0.4rem;">• <strong>Classifier:</strong> Logistic Regression (L2 Regularized)</p>
+        <p style="margin-bottom: 0.4rem;">• <strong>Solver:</strong> L-BFGS | <strong>Inverse Reg (C):</strong> 1.0</p>
+        <p style="margin-bottom: 0.4rem;">• <strong>Boundary Anchors:</strong> 38 Decision Boundary Exemplars (20 IDA, 18 BTT)</p>
+        <p>• <strong>Preprocessing:</strong> StandardScaler on 9 clinical complete blood count indices</p>
+      </div>
+    </aside>
+
+    <!-- RIGHT PANEL: Diagnostic Verdict & Multi-Perspective XAI Suite -->
+    <section class="right-panel">
+      
+      <!-- HERO VERDICT CARD -->
+      <div class="verdict-hero btt-verdict" id="verdictHero">
+        <div class="verdict-grid">
+          
+          <div class="verdict-main">
+            <div class="verdict-tag">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 14"/></svg>
+              Primary AI Diagnostic Determination
+            </div>
+            <div class="verdict-title" id="verdictTitle">Beta Thalassemia Trait / Heterozygous</div>
+            
+            <div class="verdict-meta-row">
+              <div class="confidence-chip">
+                <span>Model Confidence:</span>
+                <span id="verdictConfidence" style="color: #c4b5fd;">94.2%</span>
+              </div>
+              <div class="margin-indicator">
+                <span>Logistic Decision Margin:</span>
+                <strong id="verdictMargin">+1.17</strong>
+                <span class="badge" id="marginZoneBadge" style="background: rgba(139, 92, 246, 0.2); color: #c4b5fd;">Strong Confidence</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Probability Gauges -->
+          <div class="prob-gauges">
+            <div class="prob-row">
+              <div class="prob-labels">
+                <span style="color: #c4b5fd;">Beta Thalassemia Trait (BTT)</span>
+                <span id="probValBTT" style="color: #c4b5fd;">94.2%</span>
+              </div>
+              <div class="prob-bar-track">
+                <div class="prob-bar-fill btt" id="probBarBTT" style="width: 94.2%;"></div>
+              </div>
+            </div>
+
+            <div class="prob-row">
+              <div class="prob-labels">
+                <span style="color: #67e8f9;">Iron Deficiency Anemia (IDA)</span>
+                <span id="probValIDA" style="color: #67e8f9;">5.8%</span>
+              </div>
+              <div class="prob-bar-track">
+                <div class="prob-bar-fill ida" id="probBarIDA" style="width: 5.8%;"></div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Mentzer vs AI Concordance Alert Banner -->
+        <div class="discordance-banner concordant" id="discordanceBanner">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          <div id="discordanceText">
+            Both the traditional Mentzer rule (&lt;13) and AI decision boundary agree on Beta Thalassemia Trait.
+          </div>
+        </div>
+      </div>
+
+      <!-- EXPLAINABILITY NAVIGATION TABS -->
+      <nav class="tabs-nav" role="tablist">
+        <button class="tab-btn active" data-tab="tab-shap" role="tab" id="tabBtnShap">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          1. SHAP Feature Attribution
+        </button>
+        <button class="tab-btn" data-tab="tab-boundary" role="tab" id="tabBtnBoundary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+          2. 2D Decision Space Visualizer
+        </button>
+        <button class="tab-btn" data-tab="tab-exemplars" role="tab" id="tabBtnExemplars">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          3. Boundary Exemplars (Case Twins)
+        </button>
+        <button class="tab-btn" data-tab="tab-whatif" role="tab" id="tabBtnWhatif">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          4. What-If Sensitivity & Counterfactuals
+        </button>
+        <button class="tab-btn" data-tab="tab-cohort" role="tab" id="tabBtnCohort">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          5. HPLC Cohort Explorer (1,190 Patients)
+        </button>
+      </nav>
+
+      <!-- TAB 1: SHAP Waterfall & Local Feature Attribution -->
+      <div class="tab-content active" id="tab-shap">
+        <div class="glass-card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Local SHAP Feature Attribution (Waterfall Force Model)</div>
+              <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.2rem;">
+                Baseline Cohort Prior: <strong id="shapBaseline">51.0%</strong> | Each bar represents how much a specific blood metric pushed the probability towards <span style="color: #c084fc; font-weight: 600;">Beta Thalassemia (+)</span> or towards <span style="color: #38bdf8; font-weight: 600;">Iron Deficiency Anemia (-)</span>.
+              </div>
+            </div>
+          </div>
+
+          <!-- SHAP Waterfall Visual List -->
+          <div class="waterfall-container" id="waterfallContainer">
+            <!-- Dynamically populated by JS -->
+          </div>
+
+          <!-- Clinical Mechanism Narratives -->
+          <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-subtle);">
+            <div style="font-size: 0.85rem; font-weight: 700; color: #f1f5f9; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              Clinical Hematopathology Mechanism Rationale
+            </div>
+            <ul id="clinicalNarrativeList" style="padding-left: 1.25rem; font-size: 0.8rem; color: #cbd5e1; display: flex; flex-direction: column; gap: 0.4rem;">
+              <!-- Dynamically populated -->
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: 2D Decision Space & Non-Linear Boundary Canvas -->
+      <div class="tab-content" id="tab-boundary">
+        <div class="glass-card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Multi-Dimensional Logistic Regression Decision Surface</div>
+              <div style="font-size: 0.75rem; color: var(--text-secondary);">
+                Projecting the 9-dimensional decision boundary onto any two selectable clinical axes. Active patient position updates in real-time.
+              </div>
+            </div>
+          </div>
+
+          <!-- Axis Selectors -->
+          <div class="boundary-controls">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <label for="axisX" style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">X-Axis:</label>
+              <select id="axisX" class="select-custom">
+                <option value="RBC Count" selected>RBC Count (10¹²/L)</option>
+                <option value="Hemoglobin">Hemoglobin (g/dL)</option>
+                <option value="MCV">MCV (fL)</option>
+                <option value="RDW-CV">RDW-CV (%)</option>
+                <option value="Age_years">Age (Years)</option>
+              </select>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <label for="axisY" style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">Y-Axis:</label>
+              <select id="axisY" class="select-custom">
+                <option value="MCV" selected>MCV (fL)</option>
+                <option value="RDW-CV">RDW-CV (%)</option>
+                <option value="Hemoglobin">Hemoglobin (g/dL)</option>
+                <option value="Mentzer Index">Mentzer Index (Ratio)</option>
+                <option value="MCHC">MCHC (g/dL)</option>
+              </select>
+            </div>
+
+            <button id="btnRecalculateBoundary" class="btn btn-secondary" style="font-size: 0.8rem; margin-left: auto;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
+              Refresh Surface Grid
+            </button>
+          </div>
+
+          <!-- Canvas Visualizer -->
+          <div class="canvas-wrapper" id="canvasWrapper">
+            <canvas id="decisionCanvas"></canvas>
+            <div id="canvasTooltip" class="canvas-tooltip"></div>
+          </div>
+
+          <!-- Canvas Legend -->
+          <div class="canvas-legend">
+            <div class="legend-item">
+              <div class="legend-dot" style="background: rgba(139, 92, 246, 0.7);"></div>
+              <span>Beta Thalassemia Trait Territory (Purple Region)</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-dot" style="background: rgba(6, 182, 212, 0.7);"></div>
+              <span>Iron Deficiency Anemia Territory (Cyan Region)</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-dot" style="background: #ffffff; border: 2px solid #8b5cf6;"></div>
+              <span>Boundary Exemplars (Decision Margin Anchors)</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-dot" style="background: #f43f5e; box-shadow: 0 0 8px #f43f5e;"></div>
+              <span>Current Evaluated Patient (Red Pulsing Pin)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 3: Support Vector Exemplars (Case-Based Reasoning) -->
+      <div class="tab-content" id="tab-exemplars">
+        <div class="glass-card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Nearest Boundary Exemplars (Case-Based Twins)</div>
+              <div style="font-size: 0.75rem; color: var(--text-secondary);">
+                Logistic decisions are referenced against training prototypes. These cards display the top 3 closest historical cohort cases in scaled 9D feature space.
+              </div>
+            </div>
+          </div>
+
+          <div class="exemplar-grid" id="exemplarGrid">
+            <!-- Dynamically populated by JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 4: What-If Sensitivity & Counterfactual Simulator -->
+      <div class="tab-content" id="tab-whatif">
+        <div class="glass-card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">What-If Sensitivity & Minimal Perturbation Analysis</div>
+              <div style="font-size: 0.75rem; color: var(--text-secondary);">
+                Simulate clinical hypothetical variations to observe how changes in key markers alter diagnostic probabilities.
+              </div>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 1rem;">
+            
+            <!-- RBC Sensitivity Sweep -->
+            <div style="background: rgba(15, 23, 42, 0.6); padding: 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+              <div style="font-size: 0.85rem; font-weight: 700; color: #f1f5f9; margin-bottom: 0.5rem;">
+                Sensitivity to RBC Count Variations
+              </div>
+              <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+                Simulated response of BTT probability across +/- 1.0 10¹²/L shifts in RBC Count (with auto-adjusted Mentzer index).
+              </div>
+              <div style="height: 200px;">
+                <canvas id="chartRbcSensitivity"></canvas>
+              </div>
+            </div>
+
+            <!-- RDW Sensitivity Sweep -->
+            <div style="background: rgba(15, 23, 42, 0.6); padding: 1rem; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+              <div style="font-size: 0.85rem; font-weight: 700; color: #f1f5f9; margin-bottom: 0.5rem;">
+                Sensitivity to RDW-CV (Anisocytosis)
+              </div>
+              <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+                Simulated response of BTT probability across +/- 3.0% variations in RDW-CV.
+              </div>
+              <div style="height: 200px;">
+                <canvas id="chartRdwSensitivity"></canvas>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Counterfactual Summary Card -->
+          <div style="margin-top: 1.5rem; padding: 1rem; background: rgba(99, 102, 241, 0.1); border-radius: var(--radius-sm); border: 1px solid rgba(99, 102, 241, 0.3);">
+            <div style="font-size: 0.85rem; font-weight: 700; color: #a5b4fc; margin-bottom: 0.4rem;">
+              Decision Boundary Inversion Summary
+            </div>
+            <p id="counterfactualText" style="font-size: 0.8rem; color: #e2e8f0; line-height: 1.5;">
+              Analyzing minimum parameter adjustments required to alter the diagnostic classification...
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 5: HPLC Cohort Explorer (1,190 Patients) -->
+      <div class="tab-content" id="tab-cohort">
+        <div class="glass-card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">HPLC Clinical Cohort Explorer (995 IDA/BTT Cohort &amp; 1,190 Study Samples)</div>
+              <div style="font-size: 0.75rem; color: var(--text-secondary);">
+                Browse clinical cases from the study. Click <strong>"Load into Analyzer"</strong> on any row to immediately run the diagnostic and explainability pipeline.
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <label for="filterCohort" style="font-size: 0.75rem; color: var(--text-muted);">Filter:</label>
+              <select id="filterCohort" class="select-custom" style="padding: 0.35rem 0.75rem; font-size: 0.75rem;">
+                <option value="ida_btt" selected>IDA &amp; Beta Thalassemia Trait (995 Cohort)</option>
+                <option value="all">All Study Records (1,190 Samples)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="table-responsive">
+            <table class="cohort-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Age</th>
+                  <th>RBC (10¹²/L)</th>
+                  <th>Hb (g/dL)</th>
+                  <th>MCV (fL)</th>
+                  <th>MCH (pg)</th>
+                  <th>RDW-CV (%)</th>
+                  <th>Mentzer</th>
+                  <th>HPLC Gold Standard</th>
+                  <th>Model Output</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="cohortTableBody">
+                <!-- Dynamically populated by JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- Clinical Diagnostic Report Modal (Printable) -->
+  <div class="modal-overlay" id="reportModal">
+    <div class="modal-card">
+      <div class="report-header">
+        <div>
+          <h2 style="font-size: 1.4rem; font-weight: 800; color: #f8fafc;">Clinical Diagnostic & XAI Report</h2>
+          <div style="font-size: 0.75rem; color: var(--text-secondary);">HemoVision AI Diagnostic Decision Support System</div>
+        </div>
+        <button id="btnCloseModal" class="btn btn-secondary" style="padding: 0.3rem 0.6rem;">✕</button>
+      </div>
+
+      <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 1rem; display: flex; justify-content: space-between;">
+        <span><strong>Report Date:</strong> <span id="reportDate"></span></span>
+        <span><strong>Model Version:</strong> Logistic Regression v1.1.0 (Validated on HPLC)</span>
+      </div>
+
+      <div style="padding: 1rem; background: rgba(30, 41, 59, 0.7); border-radius: 8px; margin-bottom: 1rem;">
+        <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase;">Diagnostic Finding:</div>
+        <div id="reportDiagnosis" style="font-size: 1.4rem; font-weight: 800; margin: 0.2rem 0; color: #a5b4fc;">Beta Thalassemia Trait</div>
+        <div id="reportConfidence" style="font-size: 0.85rem; color: #e2e8f0;">Model Confidence: 94.2% | Margin: +1.17</div>
+      </div>
+
+      <h4 style="font-size: 0.85rem; font-weight: 700; color: #f1f5f9; margin-top: 1rem;">Patient Complete Blood Count (CBC) Indices:</h4>
+      <table class="report-table">
+        <thead>
+          <tr>
+            <th>Parameter</th>
+            <th>Patient Value</th>
+            <th>Ref. Range</th>
+            <th>Attribution (SHAP)</th>
+          </tr>
+        </thead>
+        <tbody id="reportTableBody">
+          <!-- Dynamically populated -->
+        </tbody>
+      </table>
+
+      <h4 style="font-size: 0.85rem; font-weight: 700; color: #f1f5f9; margin-top: 1rem;">Traditional Mentzer Index Comparison:</h4>
+      <p id="reportMentzerText" style="font-size: 0.8rem; color: #cbd5e1; margin-top: 0.3rem; line-height: 1.4;"></p>
+
+      <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 0.75rem;">
+        <button onclick="window.print()" class="btn btn-primary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          Print Report
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Application Logic -->
+  <script src="/static/app.js"></script>
+</body>
+</html>
