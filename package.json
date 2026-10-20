@@ -1,0 +1,30 @@
+{
+  "name": "hemovision-ai",
+  "version": "1.0.0",
+  "description": "HemoVision AI — Clinical Hemoglobinopathy Decision Support System",
+  "main": "server.py",
+  "scripts": {
+    "dev": "uvicorn server:app --reload",
+    "start": "uvicorn server:app"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Soumya1234567890/HemoVision-AI.git"
+  },
+  "keywords": [
+    "healthcare",
+    "ai",
+    "machine-learning",
+    "hemoglobinopathy",
+    "diagnostics"
+  ],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Soumya1234567890/HemoVision-AI/issues"
+  },
+  "homepage": "https://github.com/Soumya1234567890/HemoVision-AI#readme",
+  "dependencies": {
+    "@vercel/speed-insights": "^2.0.0"
+  }
+}
